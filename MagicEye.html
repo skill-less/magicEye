@@ -51,9 +51,9 @@ button{cursor:pointer}
 #padWrap{flex:1;min-height:120px;display:flex;align-items:center;justify-content:center}
 #pad{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;touch-action:none;background:#9fdc8f center/cover no-repeat}
 #pad::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.18);pointer-events:none}
-.eyeH{position:absolute;left:0;top:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d6d6d6);box-shadow:0 4px 14px rgba(0,0,0,.45);will-change:transform;pointer-events:none;z-index:2;transition:box-shadow .15s}
+.eyeH{position:absolute;left:0;top:0;border-radius:50%;background:#fff;will-change:transform;pointer-events:none;z-index:2;transition:box-shadow .15s}
 .eyeH i{position:absolute;left:27%;top:27%;width:46%;height:46%;border-radius:50%;background:#3b3533}
-.eyeH.held{box-shadow:0 0 0 4px var(--acc),0 4px 14px rgba(0,0,0,.45)}
+.eyeH.held{box-shadow:0 0 0 4px var(--acc)}
 .padHint{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);pointer-events:none;z-index:3}
 .row{display:flex;gap:8px}
 .row>*{flex:1}
@@ -163,12 +163,6 @@ button{cursor:pointer}
     <label class="chk"><input type="checkbox" id="sTrail"> เงาตามหลังเวลาลูกตาเคลื่อนที่</label>
     <label class="chk"><input type="checkbox" id="sBrows"> แสดงคิ้ว (ตอนยิ้ม/โกรธ/เศร้า/งง)</label>
     <div class="inlineColor">สีคิ้ว <input type="color" id="sBrowColor"></div>
-    <label class="set">กลับเป็น Stand by อัตโนมัติเมื่อไม่ได้แตะ
-      <select id="sIdle">
-        <option value="30">30 วินาที</option><option value="60">1 นาที</option><option value="300">5 นาที</option>
-        <option value="600">10 นาที</option><option value="0">ไม่ Stand by</option>
-      </select>
-    </label>
     <p class="hint">ลิงก์จอแสดงผล: <span id="dispLink"></span></p>
   </div>
 </div>
@@ -215,7 +209,7 @@ const pageURL = v => `${location.origin}${location.pathname}?view=${v}&room=${en
 
 const DEF = {
   bg: { type: 'color', color: '#9fdc8f' },
-  settings: { size: 0.17, pupil: 0.46, trail: true, brows: true, idle: 30, browColor: '#2b2b2b' }
+  settings: { size: 0.17, pupil: 0.46, trail: true, brows: true, browColor: '#2b2b2b' }
 };
 const BG_SWATCHES = ['#9fdc8f', '#000000', '#ffffff', '#ffd1dc', '#87cefa', '#ffe066', '#c8a2ff', '#ff8a65'];
 
@@ -492,26 +486,13 @@ function initDisplay(bus) {
   }
   function drawEye(e, R, bv) {
     const cx = e.p.x, cy = e.p.y;
-    // เงาใต้ลูกตา
-    ctx.save(); ctx.translate(0, R * .07);
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
-    regionPath(e, cx, cy, R, bv); ctx.clip();
-    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(cx - R * 1.2, cy - R * 1.2, R * 2.4, R * 2.4);
-    ctx.restore();
-    // ตาขาว
+    // แบบแบน 2D: ตาขาวสีเดียว + ตาดำสีเดียว ไม่มีเงา/ไล่สี/จุดสะท้อน
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
-    const { ups, los } = regionPath(e, cx, cy, R, bv); ctx.clip();
-    const g = ctx.createRadialGradient(cx - R * .25, cy - R * .3, R * .1, cx, cy, R);
-    g.addColorStop(0, '#ffffff'); g.addColorStop(.7, '#f2f2f2'); g.addColorStop(1, '#cdcdcd');
-    ctx.fillStyle = g; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-    // ตาดำ
-    const pr = R * S.settings.pupil, px = cx + e.pu.x, py = cy + e.pu.y;
-    ctx.fillStyle = '#3b3533'; ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(px - pr * .35, py - pr * .38, pr * .2, 0, TAU); ctx.fill();
-    // เส้นขอบเปลือกตา
-    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = R * .07;
-    polyline(ups); ctx.stroke(); polyline(los); ctx.stroke();
+    regionPath(e, cx, cy, R, bv); ctx.clip();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    const pr = R * S.settings.pupil;
+    ctx.fillStyle = '#3b3533'; ctx.beginPath(); ctx.arc(cx + e.pu.x, cy + e.pu.y, pr, 0, TAU); ctx.fill();
     ctx.restore();
   }
   function drawBrow(e, R) {
@@ -543,9 +524,6 @@ function initDisplay(bus) {
       const d = defaultPair(st, a);
       eyes[0].p = { x: d.l.x * W, y: d.l.y * H }; eyes[1].p = { x: d.r.x * W, y: d.r.y * H };
       eyes[0].t = { ...d.l }; eyes[1].t = { ...d.r }; placed = true;
-    }
-    if (S.mode === 'manual' && st.idle > 0 && now - lastInput > st.idle * 1000) {
-      S.mode = 'standby'; sb.next = 0; bus.set('mode', 'standby');
     }
     if (S.mode === 'manual') {
       const m = manual || defaultPair(st, a);
@@ -660,7 +638,6 @@ function initRemote(bus) {
     if (now - sendT >= 33) sendNow();
     else if (!pend) { pend = true; setTimeout(() => { pend = false; sendNow(); }, 33 - (now - sendT)); }
   }
-  setInterval(() => { if (ptrs.size) sendNow(); }, 1000);   // heartbeat ระหว่างกดค้าง กันกลับ Stand by
 
   function ensureManual() {
     if (mode !== 'manual') {
@@ -794,15 +771,12 @@ function initRemote(bus) {
     $('#sPupil').value = Math.round(st.pupil * 100); $('#vPupil').textContent = Math.round(st.pupil * 100) + '%';
     $('#sTrail').checked = !!st.trail; $('#sBrows').checked = !!st.brows;
     $('#sBrowColor').value = st.browColor;
-    if (![...$('#sIdle').options].some(o => o.value === String(st.idle))) { st.idle = 30; sendSettings(); }  // ค่าเก่า (เช่น 15 วิ) ปรับเป็น 30 วิ
-    $('#sIdle').value = String(st.idle);
   }
   $('#sSize').oninput = e => { st.size = e.target.value / 100; $('#vSize').textContent = e.target.value; sendSettings(); };
   $('#sPupil').oninput = e => { st.pupil = e.target.value / 100; $('#vPupil').textContent = e.target.value + '%'; sendSettings(); };
   $('#sTrail').onchange = e => { st.trail = e.target.checked; sendSettings(); };
   $('#sBrows').onchange = e => { st.brows = e.target.checked; sendSettings(); };
   $('#sBrowColor').oninput = e => { st.browColor = e.target.value; sendSettings(); };
-  $('#sIdle').onchange = e => { st.idle = +e.target.value; sendSettings(); };
 
   syncSettingsUI(); modeUI(); exprUI(); bgUI(); layout();
   keepAwake();
