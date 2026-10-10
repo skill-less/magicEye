@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
-<head> 
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0f1115">
@@ -57,6 +57,10 @@ button{cursor:pointer}
 .padHint{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);pointer-events:none;z-index:3}
 .row{display:flex;gap:8px}
 .row>*{flex:1}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.row4 .btn{padding:7px 2px 6px;font-size:20px;line-height:1.2;display:flex;flex-direction:column;align-items:center}
+.row4 .btn small{font-size:11px;font-weight:600;color:var(--mut)}
+.pill.err{color:#ff6b6b;border-color:rgba(255,107,107,.5);white-space:normal;max-width:60%}
 .btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 8px;font-weight:600;text-align:center}
 .btn:active,.expr button:active{transform:scale(.96)}
 .expr{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
@@ -101,7 +105,7 @@ button{cursor:pointer}
 <!-- ================= DISPLAY ================= -->
 <div id="display" hidden>
   <canvas id="cv"></canvas>
-  <div id="qrBox"><div id="qr"></div><b>สแกนเพื่อบังคับตา 👀</b><small id="qrRoom"></small></div>
+  <div id="qrBox" class="off"><div id="qr"></div><b>สแกนเพื่อบังคับตา 👀</b><small id="qrRoom"></small></div>
   <div id="dispStatus"></div>
 </div>
 
@@ -122,9 +126,11 @@ button{cursor:pointer}
       <div class="padHint">ลากที่ว่าง = ขยับทั้งคู่ · จับที่ลูกตา = แยกบังคับ</div>
     </div>
   </div>
-  <div class="row">
-    <button class="btn" id="btnCenter">🎯 กลับกลาง</button>
-    <button class="btn" id="btnBlink">😉 กระพริบ</button>
+  <div class="row4">
+    <button class="btn" id="btnCenter">🎯<small>กลับกลาง</small></button>
+    <button class="btn" data-blink="l">😉<small>กระพริบซ้าย</small></button>
+    <button class="btn" data-blink="both">😑<small>กระพริบคู่</small></button>
+    <button class="btn" data-blink="r">😉<small>กระพริบขวา</small></button>
   </div>
   <div class="expr" id="exprRow">
     <button data-expr="normal"><span>😐</span>ปกติ</button>
@@ -159,8 +165,8 @@ button{cursor:pointer}
     <div class="inlineColor">สีคิ้ว <input type="color" id="sBrowColor"></div>
     <label class="set">กลับเป็น Stand by อัตโนมัติเมื่อไม่ได้แตะ
       <select id="sIdle">
-        <option value="0">ไม่กลับ</option><option value="5">5 วินาที</option><option value="10">10 วินาที</option>
-        <option value="15">15 วินาที</option><option value="30">30 วินาที</option><option value="60">1 นาที</option>
+        <option value="30">30 วินาที</option><option value="60">1 นาที</option><option value="300">5 นาที</option>
+        <option value="600">10 นาที</option><option value="0">ไม่ Stand by</option>
       </select>
     </label>
     <p class="hint">ลิงก์จอแสดงผล: <span id="dispLink"></span></p>
@@ -209,7 +215,7 @@ const pageURL = v => `${location.origin}${location.pathname}?view=${v}&room=${en
 
 const DEF = {
   bg: { type: 'color', color: '#9fdc8f' },
-  settings: { size: 0.17, pupil: 0.46, trail: true, brows: true, idle: 15, browColor: '#2b2b2b' }
+  settings: { size: 0.17, pupil: 0.46, trail: true, brows: true, idle: 30, browColor: '#2b2b2b' }
 };
 const BG_SWATCHES = ['#9fdc8f', '#000000', '#ffffff', '#ffd1dc', '#87cefa', '#ffe066', '#c8a2ff', '#ff8a65'];
 
@@ -241,13 +247,16 @@ async function createBus() {
       await loadScript(FB_SDK + 'firebase-database-compat.js');
       const app = firebase.apps.find(a => a.name === 'magicEye') || firebase.initializeApp(FIREBASE_CONFIG, 'magicEye');
       const db = app.database(), root = db.ref('magicEye/' + ROOM);
+      const errSubs = [];
+      const fail = e => { console.warn('[Firebase]', e); errSubs.forEach(f => f(e)); };
       return {
         kind: 'firebase',
-        set: (p, v) => root.child(p).set(v).catch(e => console.warn(e)),
-        on: (p, cb) => root.child(p).on('value', s => cb(s.val())),
-        onConnected: cb => db.ref('.info/connected').on('value', s => cb(!!s.val()))
+        set: (p, v) => root.child(p).set(v).catch(fail),
+        on: (p, cb) => root.child(p).on('value', s => cb(s.val()), fail),
+        onConnected: cb => db.ref('.info/connected').on('value', s => cb(!!s.val())),
+        onError: f => errSubs.push(f)
       };
-    } catch (e) { console.warn('Firebase failed, using local mode', e); }
+    } catch (e) { console.warn('Firebase failed, using local mode', e); fbFailed = true; }
   }
   // local test mode: BroadcastChannel between tabs of the same browser
   const KEY = 'magicEye:' + ROOM;
@@ -268,9 +277,16 @@ async function createBus() {
       return Promise.resolve();
     },
     on(p, cb) { (subs[p] = subs[p] || []).push(cb); const v = st[p]; setTimeout(() => cb(v === undefined ? null : v), 0); },
-    onConnected(cb) { cb(true); }
+    onConnected(cb) { cb(true); },
+    onError() {},
+    fallback: fbFailed
   };
 }
+let fbFailed = false;
+const errText = e => {
+  const c = (e && (e.code || e.message) || '').toString();
+  return /permission/i.test(c) ? 'Rules ไม่อนุญาต (permission denied) — เปิด .read/.write ที่ path magicEye' : 'Firebase error: ' + c;
+};
 
 async function keepAwake() {
   if (!('wakeLock' in navigator)) return;
@@ -355,10 +371,21 @@ function initDisplay(bus) {
   bus.on('ctrl', v => {
     if (!gotCtrl) { gotCtrl = true; if (v) manual = v; return; }
     if (!v) return;
-    manual = v; lastInput = performance.now(); showQR(false);
+    manual = v; lastInput = performance.now();
   });
-  bus.on('blink', () => { if (!gotBlink) { gotBlink = true; return; } bl.start = performance.now(); });
-  bus.onConnected(ok => status(ok ? '' : '⚠️ ขาดการเชื่อมต่อ', !ok));
+  bus.on('blink', v => {
+    if (!gotBlink) { gotBlink = true; return; }
+    const now = performance.now(), which = v && v.eye;
+    const d = which === 'l' || which === 'r' ? 380 : 220;   // ขยิบตาข้างเดียวให้ค้างนานขึ้นนิดให้เห็นชัด
+    if (which !== 'r') { bl.start[0] = now; bl.dur[0] = d; }
+    if (which !== 'l') { bl.start[1] = now; bl.dur[1] = d; }
+  });
+  let wasDown = false;
+  bus.onConnected(ok => {
+    if (!ok) { wasDown = true; status('⚠️ ขาดการเชื่อมต่อ Firebase', true); }
+    else if (wasDown) { wasDown = false; status('✅ เชื่อมต่อ Firebase แล้ว'); }
+  });
+  bus.onError(e => status('❌ ' + errText(e), true));
 
   /* ---- standby wandering ---- */
   const sb = { next: 0, look: { x: 0, y: 0 }, lookNext: 0 };
@@ -383,13 +410,18 @@ function initDisplay(bus) {
   }
 
   /* ---- blink ---- */
-  const bl = { start: -1, next: performance.now() + 2000, dur: 170 };
-  function blinkVal(now) {
-    if (now > bl.next) { bl.start = now; bl.next = now + (Math.random() < .15 ? 260 : rand(2200, 6000)); }
-    if (bl.start < 0) return 0;
-    const ph = (now - bl.start) / bl.dur;
-    if (ph >= 1) { bl.start = -1; return 0; }
-    return ph < .5 ? ph * 2 : (1 - ph) * 2;
+  const bl = { start: [-1, -1], dur: [170, 170], next: performance.now() + 2000 };
+  function blinkVals(now) {
+    if (now > bl.next) {
+      for (let i = 0; i < 2; i++) if (bl.start[i] < 0) { bl.start[i] = now; bl.dur[i] = 170; }
+      bl.next = now + (Math.random() < .15 ? 260 : rand(2200, 6000));
+    }
+    return bl.start.map((s, i) => {
+      if (s < 0) return 0;
+      const ph = (now - s) / bl.dur[i];
+      if (ph >= 1) { bl.start[i] = -1; return 0; }
+      return ph < .5 ? ph * 2 : (1 - ph) * 2;
+    });
   }
 
   /* ---- physics ---- */
@@ -530,10 +562,10 @@ function initDisplay(bus) {
       stepEye(e, dt, R, now, ex, look);
     });
 
-    const bv = blinkVal(now);
+    const bv = blinkVals(now);
     drawBG();
     if (st.trail) eyes.forEach(e => drawTrail(e, R, now));
-    eyes.forEach(e => drawEye(e, R, bv));
+    eyes.forEach((e, i) => drawEye(e, R, bv[i]));
     eyes.forEach(e => drawBrow(e, R));
     publish(now);
     requestAnimationFrame(loop);
@@ -555,7 +587,14 @@ function initDisplay(bus) {
     el.textContent = msg; el.classList.add('show');
     if (!sticky) stT = setTimeout(() => el.classList.remove('show'), 4000);
   }
-  status((bus.kind === 'local' ? '🧪 โหมดทดสอบในเครื่อง · ' : '') + 'ดับเบิลคลิก = เต็มจอ · Q = QR · 1-5 = อารมณ์ · S = Stand by');
+  if (bus.fallback) status('❌ โหลด Firebase ไม่ได้ — ตอนนี้เป็นโหมดทดสอบในเครื่อง รีโมทจากมือถือจะหาจอไม่เจอ', true);
+  else status((bus.kind === 'local' ? '🧪 โหมดทดสอบในเครื่อง · ' : '✅ Firebase · ') + 'ห้อง ' + ROOM + ' · เลื่อนเมาส์ไปมุมขวาล่าง = QR · ดับเบิลคลิก = เต็มจอ');
+
+  // QR ซ่อนไว้ แสดงเมื่อเมาส์อยู่มุมขวาล่าง (กด Q เพื่อปักค้าง)
+  let qrPinned = false;
+  const inCorner = e => e.clientX > innerWidth - 320 && e.clientY > innerHeight - 320;
+  addEventListener('mousemove', e => { if (!qrPinned) showQR(inCorner(e)); });
+  document.addEventListener('mouseleave', () => { if (!qrPinned) showQR(false); });
 
   const fs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
   root.addEventListener('dblclick', fs);
@@ -563,9 +602,11 @@ function initDisplay(bus) {
   addEventListener('mousemove', () => { root.classList.remove('hidecur'); clearTimeout(curT); curT = setTimeout(() => root.classList.add('hidecur'), 2000); });
   addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
-    if (k === 'q') showQR(qrBox.classList.contains('off'));
+    if (k === 'q') { qrPinned = !qrPinned; showQR(qrPinned); }
     else if (k === 'f') fs();
-    else if (k === 'b') bus.set('blink', Date.now());
+    else if (k === 'b') bus.set('blink', { eye: 'both', n: Date.now() });
+    else if (k === 'arrowleft') bus.set('blink', { eye: 'l', n: Date.now() });
+    else if (k === 'arrowright') bus.set('blink', { eye: 'r', n: Date.now() });
     else if (k === 's') bus.set('mode', 'standby');
     else if (k >= '1' && k <= '5') bus.set('expr', EXPR_KEYS[+k - 1]);
   });
@@ -604,6 +645,8 @@ function initRemote(bus) {
   bus.on('display/pos', v => { if (v && v.l) { ghost = v; lastSeen = performance.now(); } });
   bus.on('ctrl', v => { if (v && v.l && ptrs.size === 0) pos = { l: { ...v.l }, r: { ...v.r } }; });
   bus.onConnected(ok => { connected = ok; });
+  let errMsg = bus.fallback ? 'โหลด Firebase ไม่ได้ (โหมดทดสอบ)' : '';
+  bus.onError(e => { errMsg = errText(e); });
 
   /* ---- sending ---- */
   let sendT = 0, pend = false, seq = Math.floor(Math.random() * 1e6);
@@ -693,8 +736,10 @@ function initRemote(bus) {
     }
     const online = now - lastSeen < 4000;
     const c = $('#conn');
-    c.textContent = !connected ? '🔴 ออฟไลน์' : online ? '🟢 จอออนไลน์' : '⚪ ไม่พบจอ';
-    c.classList.toggle('on', connected && online);
+    const txt = errMsg ? '⛔ ' + errMsg : !connected ? '🔴 ออฟไลน์' : online ? '🟢 จอออนไลน์' : '⚪ ไม่พบจอ';
+    if (c.textContent !== txt) c.textContent = txt;
+    c.classList.toggle('on', !errMsg && connected && online);
+    c.classList.toggle('err', !!errMsg);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -707,7 +752,7 @@ function initRemote(bus) {
     else { ensureManual(); sendNow(); }
   });
   $('#btnCenter').onclick = () => { vib(10); ensureManual(); pos = defaultPair(st, aspect); sendNow(); };
-  $('#btnBlink').onclick = () => { vib(10); bus.set('blink', Date.now()); };
+  $$('[data-blink]').forEach(b => b.onclick = () => { vib(10); bus.set('blink', { eye: b.dataset.blink, n: Date.now() }); });
 
   function exprUI() { $$('#exprRow button').forEach(b => b.classList.toggle('act', b.dataset.expr === expr)); }
   $$('#exprRow button').forEach(b => b.onclick = () => { vib(10); expr = b.dataset.expr; exprUI(); bus.set('expr', expr); });
@@ -748,7 +793,9 @@ function initRemote(bus) {
     $('#sSize').value = Math.round(st.size * 100); $('#vSize').textContent = Math.round(st.size * 100);
     $('#sPupil').value = Math.round(st.pupil * 100); $('#vPupil').textContent = Math.round(st.pupil * 100) + '%';
     $('#sTrail').checked = !!st.trail; $('#sBrows').checked = !!st.brows;
-    $('#sBrowColor').value = st.browColor; $('#sIdle').value = String(st.idle);
+    $('#sBrowColor').value = st.browColor;
+    if (![...$('#sIdle').options].some(o => o.value === String(st.idle))) { st.idle = 30; sendSettings(); }  // ค่าเก่า (เช่น 15 วิ) ปรับเป็น 30 วิ
+    $('#sIdle').value = String(st.idle);
   }
   $('#sSize').oninput = e => { st.size = e.target.value / 100; $('#vSize').textContent = e.target.value; sendSettings(); };
   $('#sPupil').oninput = e => { st.pupil = e.target.value / 100; $('#vPupil').textContent = e.target.value + '%'; sendSettings(); };
