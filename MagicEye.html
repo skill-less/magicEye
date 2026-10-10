@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Magic Eye ตาวิเศษ</title>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1115;--card:#1a1d24;--line:#2a2f3a;--txt:#eef1f6;--mut:#8b93a5;--acc:#3ddc84;--acc2:#ff5c8a;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:'Prompt',system-ui,sans-serif;overscroll-behavior:none}
+[hidden]{display:none!important}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ---------- Landing ---------- */
+#landing{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center}
+.logo{font-size:64px;line-height:1}
+#landing h1{margin:0;font-size:28px}
+#landing p{margin:0;color:var(--mut)}
+.field{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px}
+.field input{background:none;border:0;outline:none;width:150px;color:var(--txt)}
+.bigbtn{width:min(320px,100%);padding:16px;border-radius:16px;border:0;background:var(--acc);color:#06210f;font-weight:700;font-size:18px}
+.bigbtn.alt{background:var(--card);color:var(--txt);border:1px solid var(--line)}
+.note{font-size:13px;color:var(--mut);max-width:380px;line-height:1.6}
+
+/* ---------- Display ---------- */
+#display{position:fixed;inset:0;background:#000;overflow:hidden}
+#display.hidecur{cursor:none}
+#cv{display:block}
+#qrBox{position:absolute;right:24px;bottom:24px;background:#fff;color:#111;border-radius:18px;padding:14px 14px 10px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);transition:opacity .5s}
+#qrBox.off{opacity:0;pointer-events:none}
+#qr img,#qr canvas{display:block;margin:0 auto}
+#qrBox b{display:block;margin-top:8px;font-size:15px}
+#qrBox small{color:#666;font-size:12px}
+#dispStatus{position:absolute;left:12px;top:10px;font-size:13px;color:#fff;background:rgba(0,0,0,.55);padding:5px 12px;border-radius:99px;opacity:0;transition:opacity .5s;pointer-events:none}
+#dispStatus.show{opacity:1}
+
+/* ---------- Remote ---------- */
+#remote{height:100dvh;display:flex;flex-direction:column;gap:10px;padding:calc(env(safe-area-inset-top) + 10px) 12px calc(env(safe-area-inset-bottom) + 12px);user-select:none;-webkit-user-select:none}
+.rbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.brand{font-weight:700;white-space:nowrap}
+.brand span{color:var(--mut);font-weight:400;font-size:13px;margin-left:6px}
+.pill{font-size:12px;padding:4px 10px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.pill.on{color:var(--acc);border-color:rgba(61,220,132,.45)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.seg button{border:0;background:none;padding:10px;border-radius:10px;font-weight:600;color:var(--mut)}
+.seg button.act{background:var(--acc);color:#06210f}
+.seg button[data-mode=standby].act{background:#ffd166;color:#3a2a00}
+#padWrap{flex:1;min-height:120px;display:flex;align-items:center;justify-content:center}
+#pad{position:relative;border:1px solid var(--line);border-radius:16px;overflow:hidden;touch-action:none;background:#9fdc8f center/cover no-repeat}
+#pad::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.18);pointer-events:none}
+.eyeH{position:absolute;left:0;top:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d6d6d6);box-shadow:0 4px 14px rgba(0,0,0,.45);will-change:transform;pointer-events:none;z-index:2;transition:box-shadow .15s}
+.eyeH i{position:absolute;left:27%;top:27%;width:46%;height:46%;border-radius:50%;background:#3b3533}
+.eyeH.held{box-shadow:0 0 0 4px var(--acc),0 4px 14px rgba(0,0,0,.45)}
+.padHint{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);pointer-events:none;z-index:3}
+.row{display:flex;gap:8px}
+.row>*{flex:1}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 8px;font-weight:600;text-align:center}
+.btn:active,.expr button:active{transform:scale(.96)}
+.expr{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.expr button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 0 6px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:12px}
+.expr button span{font-size:24px;line-height:1.2}
+.expr button.act{border-color:var(--acc2);background:rgba(255,92,138,.16)}
+.file{position:relative;overflow:hidden}
+.file input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+
+.sheetBg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:#171a21;border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);z-index:11;max-height:80dvh;overflow:auto}
+.sheetHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sheetHead h3{margin:0;font-size:18px}
+.x{border:0;background:var(--card);width:36px;height:36px;border-radius:50%}
+.sw{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.sw button{aspect-ratio:1.4;border-radius:12px;border:3px solid transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+.sw button.act{border-color:#fff}
+.set{display:block;margin:16px 0 4px;font-size:14px}
+.set b{float:right;color:var(--acc)}
+.set input[type=range]{width:100%;margin-top:8px;accent-color:var(--acc)}
+.set select{width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--card);border:1px solid var(--line)}
+.chk{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:14px}
+.chk input{width:20px;height:20px;accent-color:var(--acc)}
+.inlineColor{display:flex;align-items:center;justify-content:space-between;margin:14px 0;font-size:14px}
+.inlineColor input{width:56px;height:34px;border:0;background:none;padding:0}
+.hint{font-size:12px;color:var(--mut);line-height:1.6;word-break:break-all}
+</style>
+</head>
+<body>
+
+<!-- ================= LANDING ================= -->
+<div id="landing" hidden>
+  <div class="logo">👀</div>
+  <h1>Magic Eye ตาวิเศษ</h1>
+  <p>ใช้มือถือบังคับลูกตาบนจอใหญ่</p>
+  <div class="field">ห้อง <input id="roomIn" value="main" autocomplete="off"></div>
+  <button class="bigbtn" id="goDisplay">🖥️ เปิดจอแสดงผล</button>
+  <button class="bigbtn alt" id="goRemote">📱 เปิดรีโมท</button>
+  <p class="note" id="busNote"></p>
+</div>
+
+<!-- ================= DISPLAY ================= -->
+<div id="display" hidden>
+  <canvas id="cv"></canvas>
+  <div id="qrBox"><div id="qr"></div><b>สแกนเพื่อบังคับตา 👀</b><small id="qrRoom"></small></div>
+  <div id="dispStatus"></div>
+</div>
+
+<!-- ================= REMOTE ================= -->
+<div id="remote" hidden>
+  <div class="rbar">
+    <div class="brand">👀 Magic Eye<span id="roomTag"></span></div>
+    <div id="conn" class="pill">กำลังเชื่อมต่อ…</div>
+  </div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="standby">😴 Stand by</button>
+    <button data-mode="manual">🕹️ บังคับเอง</button>
+  </div>
+  <div id="padWrap">
+    <div id="pad">
+      <div class="eyeH" id="hL"><i></i></div>
+      <div class="eyeH" id="hR"><i></i></div>
+      <div class="padHint">ลากที่ว่าง = ขยับทั้งคู่ · จับที่ลูกตา = แยกบังคับ</div>
+    </div>
+  </div>
+  <div class="row">
+    <button class="btn" id="btnCenter">🎯 กลับกลาง</button>
+    <button class="btn" id="btnBlink">😉 กระพริบ</button>
+  </div>
+  <div class="expr" id="exprRow">
+    <button data-expr="normal"><span>😐</span>ปกติ</button>
+    <button data-expr="happy"><span>😊</span>ยิ้ม</button>
+    <button data-expr="angry"><span>😠</span>โกรธ</button>
+    <button data-expr="sad"><span>😢</span>เศร้า</button>
+    <button data-expr="confused"><span>😵‍💫</span>งง</button>
+  </div>
+  <div class="row">
+    <button class="btn" data-open="bgSheet">🎨 พื้นหลัง</button>
+    <button class="btn" data-open="setSheet">⚙️ ตั้งค่า</button>
+  </div>
+
+  <div class="sheetBg" id="sheetBg" hidden></div>
+
+  <div class="sheet" id="bgSheet" hidden>
+    <div class="sheetHead"><h3>🎨 พื้นหลัง</h3><button class="x" data-close>✕</button></div>
+    <div class="sw" id="swatches"></div>
+    <div class="row" style="margin-top:12px">
+      <label class="btn file">🎨 เลือกสีเอง<input type="color" id="bgColor" value="#9fdc8f"></label>
+      <label class="btn file">🖼️ อัปโหลดรูป<input type="file" id="bgFile" accept="image/*"></label>
+    </div>
+    <p class="hint" id="bgStatus">ฉายโปรเจคเตอร์ลงตึก แนะนำพื้นดำ (ไม่ยิงแสง) หรือสีสดตามแบรนด์</p>
+  </div>
+
+  <div class="sheet" id="setSheet" hidden>
+    <div class="sheetHead"><h3>⚙️ ตั้งค่า</h3><button class="x" data-close>✕</button></div>
+    <label class="set">ขนาดลูกตา <b id="vSize"></b><input type="range" id="sSize" min="8" max="34"></label>
+    <label class="set">ขนาดตาดำ <b id="vPupil"></b><input type="range" id="sPupil" min="25" max="70"></label>
+    <label class="chk"><input type="checkbox" id="sTrail"> เงาตามหลังเวลาลูกตาเคลื่อนที่</label>
+    <label class="chk"><input type="checkbox" id="sBrows"> แสดงคิ้ว (ตอนยิ้ม/โกรธ/เศร้า/งง)</label>
+    <div class="inlineColor">สีคิ้ว <input type="color" id="sBrowColor"></div>
+    <label class="set">กลับเป็น Stand by อัตโนมัติเมื่อไม่ได้แตะ
+      <select id="sIdle">
+        <option value="0">ไม่กลับ</option><option value="5">5 วินาที</option><option value="10">10 วินาที</option>
+        <option value="15">15 วินาที</option><option value="30">30 วินาที</option><option value="60">1 นาที</option>
+      </select>
+    </label>
+    <p class="hint">ลิงก์จอแสดงผล: <span id="dispLink"></span></p>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   ตั้งค่า Firebase (Realtime Database)
+   - ใส่ config ของโปรเจกต์ตัวเองแทน null
+   - ถ้าเป็น null จะใช้ "โหมดทดสอบในเครื่อง" (เปิด 2 แท็บในเบราว์เซอร์เดียวกัน)
+   ========================================================= */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCI2qm8hDHNQFZAX1CkbBrxy_SA6YI-raE",
+  authDomain: "deecrab-game00.firebaseapp.com",
+  databaseURL: "https://deecrab-game00-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "deecrab-game00",
+  storageBucket: "deecrab-game00.firebasestorage.app",
+  messagingSenderId: "558812276050",
+  appId: "1:558812276050:web:c2304e9f5af6a15d3f468b"
+};   /* ใช้ร่วมกับงานอื่น — ข้อมูลของแอปนี้อยู่ใต้ /magicEye/{room} เท่านั้น ไม่ชนกับ path อื่น */
+/* ตัวอย่าง:
+const FIREBASE_CONFIG = {
+  apiKey: "xxx",
+  authDomain: "xxx.firebaseapp.com",
+  databaseURL: "https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "xxx",
+  appId: "xxx"
+};
+*/
+const FB_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+
+/* ---------------- utils ---------------- */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const TAU = Math.PI * 2;
+const r3 = v => Math.round(v * 1000) / 1000;
+
+const params = new URLSearchParams(location.search);
+const VIEW = params.get('view');
+const ROOM = ((params.get('room') || 'main').replace(/[^a-zA-Z0-9_-]/g, '')) || 'main';
+const pageURL = v => `${location.origin}${location.pathname}?view=${v}&room=${encodeURIComponent(ROOM)}`;
+
+const DEF = {
+  bg: { type: 'color', color: '#9fdc8f' },
+  settings: { size: 0.17, pupil: 0.46, trail: true, brows: true, idle: 15, browColor: '#2b2b2b' }
+};
+const BG_SWATCHES = ['#9fdc8f', '#000000', '#ffffff', '#ffd1dc', '#87cefa', '#ffe066', '#c8a2ff', '#ff8a65'];
+
+/* geometry shared by display & remote (positions = fraction of display W/H) */
+function eyeR(st, aspect) { return Math.min(st.size, 0.24 * aspect); }   // radius as fraction of H
+function bounds(st, aspect) {
+  const r = eyeR(st, aspect);
+  return { r, rx: r / aspect * 1.04, top: r * (st.brows ? 1.9 : 1.06), bot: r * 1.06 };
+}
+function clampPos(p, b) {
+  return {
+    x: b.rx >= .5 ? .5 : clamp(p.x, b.rx, 1 - b.rx),
+    y: b.top + b.bot >= 1 ? .5 : clamp(p.y, b.top, 1 - b.bot)
+  };
+}
+function defaultPair(st, aspect) {
+  const b = bounds(st, aspect), gap = eyeR(st, aspect) * 2.35 / aspect;
+  return { l: clampPos({ x: .5 - gap / 2, y: .55 }, b), r: clampPos({ x: .5 + gap / 2, y: .55 }, b) };
+}
+
+/* ---------------- realtime bus ---------------- */
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+}
+async function createBus() {
+  if (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) {
+    try {
+      await loadScript(FB_SDK + 'firebase-app-compat.js');
+      await loadScript(FB_SDK + 'firebase-database-compat.js');
+      const app = firebase.apps.find(a => a.name === 'magicEye') || firebase.initializeApp(FIREBASE_CONFIG, 'magicEye');
+      const db = app.database(), root = db.ref('magicEye/' + ROOM);
+      return {
+        kind: 'firebase',
+        set: (p, v) => root.child(p).set(v).catch(e => console.warn(e)),
+        on: (p, cb) => root.child(p).on('value', s => cb(s.val())),
+        onConnected: cb => db.ref('.info/connected').on('value', s => cb(!!s.val()))
+      };
+    } catch (e) { console.warn('Firebase failed, using local mode', e); }
+  }
+  // local test mode: BroadcastChannel between tabs of the same browser
+  const KEY = 'magicEye:' + ROOM;
+  let st = {}; try { st = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+  const subs = {};
+  let ch = null; try { ch = new BroadcastChannel(KEY); } catch (e) {}
+  const emit = (p, v) => (subs[p] || []).forEach(cb => { try { cb(v); } catch (err) { console.error(err); } });
+  if (ch) ch.onmessage = ev => { const { p, v } = ev.data; st[p] = v; emit(p, v); };
+  return {
+    kind: 'local',
+    set(p, v) {
+      st[p] = v;
+      if (p !== 'ctrl' && p !== 'display/pos') {
+        try { const s = { ...st }; delete s.ctrl; delete s['display/pos']; localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+      }
+      if (ch) ch.postMessage({ p, v });
+      emit(p, v);
+      return Promise.resolve();
+    },
+    on(p, cb) { (subs[p] = subs[p] || []).push(cb); const v = st[p]; setTimeout(() => cb(v === undefined ? null : v), 0); },
+    onConnected(cb) { cb(true); }
+  };
+}
+
+async function keepAwake() {
+  if (!('wakeLock' in navigator)) return;
+  const req = async () => { try { await navigator.wakeLock.request('screen'); } catch (e) {} };
+  req();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') req(); });
+}
+
+/* ================= EXPRESSIONS =================
+   ค่าเปลือกตาอยู่ในหน่วยรัศมีลูกตา (y ลง = บวก)
+   uO/uI = เปลือกบนด้านนอก/ด้านใน, uC = โค้งกลาง ; lO/lI/lC = เปลือกล่าง
+   คิ้ว: dy = ระยะเหนือตา, tilt>0 = หัวคิ้วด้านในต่ำ (โกรธ), arch = ความโค้ง      */
+const OPEN = { uO: -1.3, uI: -1.3, uC: 0, lO: 1.3, lI: 1.3, lC: 0 };
+const BROW0 = { dy: -1.5, tilt: 0, arch: 1, a: 0 };
+const EXPR = {
+  normal: { L: OPEN, R: OPEN, bL: BROW0, bR: BROW0, pb: { x: 0, y: 0 } },
+  happy: {
+    L: { uO: -1.3, uI: -1.3, uC: 0, lO: .95, lI: .95, lC: -1.4 },
+    R: { uO: -1.3, uI: -1.3, uC: 0, lO: .95, lI: .95, lC: -1.4 },
+    bL: { dy: -1.6, tilt: -.1, arch: 1.4, a: 1 }, bR: { dy: -1.6, tilt: -.1, arch: 1.4, a: 1 }, pb: { x: 0, y: -.35 }
+  },
+  angry: {
+    L: { uO: -1.0, uI: -.2, uC: -.12, lO: 1.05, lI: 1.05, lC: 0 },
+    R: { uO: -1.0, uI: -.2, uC: -.12, lO: 1.05, lI: 1.05, lC: 0 },
+    bL: { dy: -1.1, tilt: .6, arch: .1, a: 1 }, bR: { dy: -1.1, tilt: .6, arch: .1, a: 1 }, pb: { x: 0, y: .05 }
+  },
+  sad: {
+    L: { uO: -.25, uI: -.95, uC: -.1, lO: 1.3, lI: 1.3, lC: 0 },
+    R: { uO: -.25, uI: -.95, uC: -.1, lO: 1.3, lI: 1.3, lC: 0 },
+    bL: { dy: -1.45, tilt: -.55, arch: .3, a: 1 }, bR: { dy: -1.45, tilt: -.55, arch: .3, a: 1 }, pb: { x: 0, y: .4 }
+  },
+  confused: {
+    L: OPEN,
+    R: { uO: -.4, uI: -.3, uC: .05, lO: .8, lI: .8, lC: 0 },
+    bL: { dy: -1.8, tilt: -.25, arch: 1.5, a: 1 }, bR: { dy: -1.15, tilt: .15, arch: -.3, a: 1 },
+    pb: { x: 0, y: 0 }, wander: true
+  }
+};
+const EXPR_KEYS = Object.keys(EXPR);
+
+/* ======================================================
+   DISPLAY
+   ====================================================== */
+function initDisplay(bus) {
+  document.documentElement.style.overflow = 'hidden';
+  const root = $('#display'), cv = $('#cv'), ctx = cv.getContext('2d');
+  let W = 1, H = 1;
+  const S = { mode: 'standby', expr: 'normal', bg: DEF.bg, settings: { ...DEF.settings } };
+  let manual = null, lastInput = 0, bgImg = null, gotCtrl = false, gotBlink = false, placed = false;
+
+  const mkEye = side => ({
+    side, p: { x: 0, y: 0 }, v: { x: 0, y: 0 }, t: { x: .5, y: .55 }, k: 40, d: 1,
+    pu: { x: 0, y: 0 }, pv: { x: 0, y: 0 }, lid: { ...OPEN }, brow: { ...BROW0 }, trail: []
+  });
+  const eyes = [mkEye(-1), mkEye(1)];
+  const asp = () => W / H;
+
+  function resize() {
+    const oW = W, oH = H, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (placed) eyes.forEach(e => { e.p.x *= W / oW; e.p.y *= H / oH; e.trail.length = 0; });
+    clearTimeout(resize.t);
+    resize.t = setTimeout(() => bus.set('display/aspect', r3(W / H)), 300);
+  }
+  addEventListener('resize', resize); resize();
+
+  /* ---- subscriptions ---- */
+  bus.on('mode', v => {
+    const m = v === 'manual' ? 'manual' : 'standby';
+    if (m !== S.mode) { S.mode = m; if (m === 'manual') lastInput = performance.now(); else sb.next = 0; }
+  });
+  bus.on('expr', v => { S.expr = EXPR[v] ? v : 'normal'; });
+  bus.on('settings', v => { S.settings = { ...DEF.settings, ...(v || {}) }; });
+  bus.on('bg', v => {
+    S.bg = v && v.type ? v : DEF.bg;
+    if (S.bg.type === 'image' && S.bg.image) { const im = new Image(); im.onload = () => { bgImg = im; }; im.src = S.bg.image; }
+    else bgImg = null;
+  });
+  bus.on('ctrl', v => {
+    if (!gotCtrl) { gotCtrl = true; if (v) manual = v; return; }
+    if (!v) return;
+    manual = v; lastInput = performance.now(); showQR(false);
+  });
+  bus.on('blink', () => { if (!gotBlink) { gotBlink = true; return; } bl.start = performance.now(); });
+  bus.onConnected(ok => status(ok ? '' : '⚠️ ขาดการเชื่อมต่อ', !ok));
+
+  /* ---- standby wandering ---- */
+  const sb = { next: 0, look: { x: 0, y: 0 }, lookNext: 0 };
+  function standbyStep(now, st, a, b) {
+    if (now > sb.next) {
+      const r = eyeR(st, a), half = r * 2.35 / a * rand(.92, 1.12) / 2;
+      const cur = { x: (eyes[0].t.x + eyes[1].t.x) / 2, y: (eyes[0].t.y + eyes[1].t.y) / 2 };
+      let cx, cy;
+      if (Math.random() < .35) { cx = cur.x + rand(-.15, .15); cy = cur.y + rand(-.12, .12); }
+      else { cx = Math.random(); cy = Math.random(); }
+      const xlo = b.rx + half, xhi = 1 - b.rx - half;
+      cx = xlo >= xhi ? .5 : clamp(cx, xlo, xhi);
+      cy = b.top + b.bot >= 1 ? .5 : clamp(cy, b.top, 1 - b.bot);
+      const k = rand(14, 60), d = rand(.78, 1);   // ความเร็วสุ่ม: ไม่ช้า/เร็วเกินไป
+      eyes.forEach((e, i) => { e.t = { x: cx + (i ? half : -half), y: cy + rand(-.01, .01) }; e.k = k * rand(.88, 1.12); e.d = d; });
+      sb.next = now + rand(900, 3200) + (k < 25 ? 900 : 0);
+    }
+    if (now > sb.lookNext) {
+      sb.look = Math.random() < .3 ? { x: 0, y: 0 } : { x: rand(-.8, .8), y: rand(-.6, .6) };
+      sb.lookNext = now + rand(600, 2400);
+    }
+  }
+
+  /* ---- blink ---- */
+  const bl = { start: -1, next: performance.now() + 2000, dur: 170 };
+  function blinkVal(now) {
+    if (now > bl.next) { bl.start = now; bl.next = now + (Math.random() < .15 ? 260 : rand(2200, 6000)); }
+    if (bl.start < 0) return 0;
+    const ph = (now - bl.start) / bl.dur;
+    if (ph >= 1) { bl.start = -1; return 0; }
+    return ph < .5 ? ph * 2 : (1 - ph) * 2;
+  }
+
+  /* ---- physics ---- */
+  function stepEye(e, dt, R, now, ex, look) {
+    const tx = e.t.x * W, ty = e.t.y * H, k = e.k, c = 2 * Math.sqrt(k) * e.d, h = dt / 2;
+    for (let i = 0; i < 2; i++) {
+      e.v.x += (k * (tx - e.p.x) - c * e.v.x) * h; e.v.y += (k * (ty - e.p.y) - c * e.v.y) * h;
+      e.p.x += e.v.x * h; e.p.y += e.v.y * h;
+    }
+    // ตาดำเอนไปทางที่ลูกตากำลังเคลื่อนที่
+    const sp = Math.hypot(e.v.x, e.v.y), mv = Math.min(sp / (R * 3), 1);
+    let gx = 0, gy = 0;
+    if (sp > .5) { gx = e.v.x / sp * mv; gy = e.v.y / sp * mv; }
+    gx += look.x * (1 - mv) + ex.pb.x; gy += look.y * (1 - mv) + ex.pb.y;
+    if (ex.wander) { const t = now / 1000; gx += Math.cos(t * 2.1 + e.side) * .45; gy += Math.sin(t * 2.7 + e.side * 1.7) * .45; }
+    const gl = Math.hypot(gx, gy); if (gl > 1) { gx /= gl; gy /= gl; }
+    const mo = R * (1 - S.settings.pupil) * .9, pk = 260, pc = 2 * Math.sqrt(pk) * .6;
+    for (let i = 0; i < 2; i++) {
+      e.pv.x += (pk * (gx * mo - e.pu.x) - pc * e.pv.x) * h; e.pv.y += (pk * (gy * mo - e.pu.y) - pc * e.pv.y) * h;
+      e.pu.x += e.pv.x * h; e.pu.y += e.pv.y * h;
+    }
+    const pl = Math.hypot(e.pu.x, e.pu.y), lim = mo * 1.1;
+    if (pl > lim) { e.pu.x *= lim / pl; e.pu.y *= lim / pl; }
+  }
+
+  /* ---- drawing ---- */
+  function drawBG() {
+    ctx.fillStyle = S.bg.color || '#000';
+    ctx.fillRect(0, 0, W, H);
+    if (S.bg.type === 'image' && bgImg) {
+      const s = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
+      const w = bgImg.naturalWidth * s, h = bgImg.naturalHeight * s;
+      ctx.drawImage(bgImg, (W - w) / 2, (H - h) / 2, w, h);
+    }
+  }
+  function lidFns(e) {
+    const L = e.lid, s = e.side, w = x => s < 0 ? (1 - x) / 2 : (1 + x) / 2;
+    return {
+      up: x => L.uI + (L.uO - L.uI) * w(x) + L.uC * (1 - x * x),
+      lo: x => L.lI + (L.lO - L.lI) * w(x) + L.lC * (1 - x * x)
+    };
+  }
+  function regionPath(e, cx, cy, R, b) {
+    const f = lidFns(e), N = 28, ups = [], los = [];
+    for (let i = 0; i <= N; i++) {
+      const x = -1.1 + 2.2 * i / N;
+      let u = f.up(x), l = Math.max(f.lo(x), u);
+      if (b > 0) { const c = lerp(u, l, .65); u = lerp(u, c, b); l = lerp(l, c, b); }
+      ups.push([cx + x * R, cy + u * R]); los.push([cx + x * R, cy + l * R]);
+    }
+    ctx.beginPath();
+    ups.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    for (let i = los.length - 1; i >= 0; i--) ctx.lineTo(los[i][0], los[i][1]);
+    ctx.closePath();
+    return { ups, los };
+  }
+  const polyline = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); };
+
+  function drawTrail(e, R, now) {
+    const TR = 450, tr = e.trail, lp = tr[tr.length - 1];
+    if (!lp || Math.hypot(e.p.x - lp.x, e.p.y - lp.y) > R * .06) tr.push({ x: e.p.x, y: e.p.y, t: now });
+    while (tr.length && now - tr[0].t > TR) tr.shift();
+    for (const s of tr) {
+      const a = .07 * Math.pow(1 - (now - s.t) / TR, 1.5);
+      ctx.fillStyle = `rgba(0,0,0,${a})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, R * .98, 0, TAU); ctx.fill();
+    }
+  }
+  function drawEye(e, R, bv) {
+    const cx = e.p.x, cy = e.p.y;
+    // เงาใต้ลูกตา
+    ctx.save(); ctx.translate(0, R * .07);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
+    regionPath(e, cx, cy, R, bv); ctx.clip();
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(cx - R * 1.2, cy - R * 1.2, R * 2.4, R * 2.4);
+    ctx.restore();
+    // ตาขาว
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.clip();
+    const { ups, los } = regionPath(e, cx, cy, R, bv); ctx.clip();
+    const g = ctx.createRadialGradient(cx - R * .25, cy - R * .3, R * .1, cx, cy, R);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(.7, '#f2f2f2'); g.addColorStop(1, '#cdcdcd');
+    ctx.fillStyle = g; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    // ตาดำ
+    const pr = R * S.settings.pupil, px = cx + e.pu.x, py = cy + e.pu.y;
+    ctx.fillStyle = '#3b3533'; ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.beginPath(); ctx.arc(px - pr * .35, py - pr * .38, pr * .2, 0, TAU); ctx.fill();
+    // เส้นขอบเปลือกตา
+    ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = R * .07;
+    polyline(ups); ctx.stroke(); polyline(los); ctx.stroke();
+    ctx.restore();
+  }
+  function drawBrow(e, R) {
+    const B = e.brow, a = B.a * (S.settings.brows ? 1 : 0);
+    if (a < .02) return;
+    const inner = -e.side, hl = R * .72, by = e.p.y + B.dy * R;
+    const ix = e.p.x + inner * hl, iy = by + B.tilt * R * .5, ox = e.p.x - inner * hl, oy = by - B.tilt * R * .5;
+    ctx.globalAlpha = Math.min(1, a);
+    ctx.strokeStyle = S.settings.browColor; ctx.lineWidth = R * .2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.quadraticCurveTo((ix + ox) / 2, (iy + oy) / 2 - B.arch * R * .25, ix, iy); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /* ---- publish positions so the remote can mirror standby ---- */
+  let pubT = 0, pubS = '';
+  function publish(now) {
+    if (now - pubT < 200) return; pubT = now;
+    const o = { l: { x: r3(eyes[0].p.x / W), y: r3(eyes[0].p.y / H) }, r: { x: r3(eyes[1].p.x / W), y: r3(eyes[1].p.y / H) }, n: Math.floor(now / 1500) };
+    const s = JSON.stringify(o);
+    if (s !== pubS) { pubS = s; bus.set('display/pos', o); }
+  }
+
+  /* ---- main loop ---- */
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+    const st = S.settings, a = asp(), R = eyeR(st, a) * H, b = bounds(st, a);
+    if (!placed) {
+      const d = defaultPair(st, a);
+      eyes[0].p = { x: d.l.x * W, y: d.l.y * H }; eyes[1].p = { x: d.r.x * W, y: d.r.y * H };
+      eyes[0].t = { ...d.l }; eyes[1].t = { ...d.r }; placed = true;
+    }
+    if (S.mode === 'manual' && st.idle > 0 && now - lastInput > st.idle * 1000) {
+      S.mode = 'standby'; sb.next = 0; bus.set('mode', 'standby');
+    }
+    if (S.mode === 'manual') {
+      const m = manual || defaultPair(st, a);
+      eyes[0].t = clampPos(m.l, b); eyes[1].t = clampPos(m.r, b);
+      eyes.forEach(e => { e.k = 150; e.d = 1; });
+    } else standbyStep(now, st, a, b);
+
+    const ex = EXPR[S.expr], kk = 1 - Math.exp(-dt * 10);
+    eyes.forEach(e => {
+      const tl = e.side < 0 ? ex.L : ex.R, tb = e.side < 0 ? ex.bL : ex.bR;
+      for (const key in tl) e.lid[key] = lerp(e.lid[key], tl[key], kk);
+      for (const key in tb) e.brow[key] = lerp(e.brow[key], tb[key], kk);
+      const look = S.mode === 'manual' ? { x: (e.p.x / W - .5) * .6, y: (e.p.y / H - .5) * .6 } : sb.look;
+      stepEye(e, dt, R, now, ex, look);
+    });
+
+    const bv = blinkVal(now);
+    drawBG();
+    if (st.trail) eyes.forEach(e => drawTrail(e, R, now));
+    eyes.forEach(e => drawEye(e, R, bv));
+    eyes.forEach(e => drawBrow(e, R));
+    publish(now);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /* ---- QR / status / controls ---- */
+  const qrBox = $('#qrBox');
+  function showQR(on) { qrBox.classList.toggle('off', !on); }
+  $('#qrRoom').textContent = 'ห้อง: ' + ROOM;
+  loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js')
+    .then(() => new QRCode($('#qr'), { text: pageURL('remote'), width: 170, height: 170, correctLevel: QRCode.CorrectLevel.M }))
+    .catch(() => { $('#qr').textContent = pageURL('remote'); });
+
+  let stT;
+  function status(msg, sticky) {
+    const el = $('#dispStatus'); clearTimeout(stT);
+    if (!msg) { el.classList.remove('show'); return; }
+    el.textContent = msg; el.classList.add('show');
+    if (!sticky) stT = setTimeout(() => el.classList.remove('show'), 4000);
+  }
+  status((bus.kind === 'local' ? '🧪 โหมดทดสอบในเครื่อง · ' : '') + 'ดับเบิลคลิก = เต็มจอ · Q = QR · 1-5 = อารมณ์ · S = Stand by');
+
+  const fs = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.();
+  root.addEventListener('dblclick', fs);
+  let curT;
+  addEventListener('mousemove', () => { root.classList.remove('hidecur'); clearTimeout(curT); curT = setTimeout(() => root.classList.add('hidecur'), 2000); });
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'q') showQR(qrBox.classList.contains('off'));
+    else if (k === 'f') fs();
+    else if (k === 'b') bus.set('blink', Date.now());
+    else if (k === 's') bus.set('mode', 'standby');
+    else if (k >= '1' && k <= '5') bus.set('expr', EXPR_KEYS[+k - 1]);
+  });
+  keepAwake();
+}
+
+/* ======================================================
+   REMOTE
+   ====================================================== */
+function initRemote(bus) {
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden';
+  $('#roomTag').textContent = '· ห้อง ' + ROOM + (bus.kind === 'local' ? ' (ทดสอบ)' : '');
+  $('#dispLink').textContent = pageURL('display');
+
+  let aspect = 16 / 9, st = { ...DEF.settings }, mode = 'standby', expr = 'normal', bg = DEF.bg;
+  let pos = null, ghost = null, lastSeen = 0, connected = true;
+  const shown = { l: null, r: null };
+  const pad = $('#pad'), wrap = $('#padWrap'), H = { l: $('#hL'), r: $('#hR') };
+  const vib = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+  function layout() {
+    const r = wrap.getBoundingClientRect();
+    let w = r.width, h = w / aspect;
+    if (h > r.height) { h = r.height; w = h * aspect; }
+    pad.style.width = w + 'px'; pad.style.height = h + 'px';
+  }
+  new ResizeObserver(layout).observe(wrap);
+
+  /* ---- subscriptions ---- */
+  bus.on('display/aspect', v => { if (v > .2 && v < 6) { aspect = v; layout(); } });
+  bus.on('settings', v => { st = { ...DEF.settings, ...(v || {}) }; syncSettingsUI(); });
+  bus.on('mode', v => { mode = v === 'manual' ? 'manual' : 'standby'; modeUI(); });
+  bus.on('expr', v => { expr = EXPR[v] ? v : 'normal'; exprUI(); });
+  bus.on('bg', v => { bg = v && v.type ? v : DEF.bg; bgUI(); });
+  bus.on('display/pos', v => { if (v && v.l) { ghost = v; lastSeen = performance.now(); } });
+  bus.on('ctrl', v => { if (v && v.l && ptrs.size === 0) pos = { l: { ...v.l }, r: { ...v.r } }; });
+  bus.onConnected(ok => { connected = ok; });
+
+  /* ---- sending ---- */
+  let sendT = 0, pend = false, seq = Math.floor(Math.random() * 1e6);
+  function sendNow() {
+    if (!pos) return;
+    sendT = performance.now();
+    bus.set('ctrl', { l: { x: r3(pos.l.x), y: r3(pos.l.y) }, r: { x: r3(pos.r.x), y: r3(pos.r.y) }, n: ++seq });
+  }
+  function scheduleSend() {
+    const now = performance.now();
+    if (now - sendT >= 33) sendNow();
+    else if (!pend) { pend = true; setTimeout(() => { pend = false; sendNow(); }, 33 - (now - sendT)); }
+  }
+  setInterval(() => { if (ptrs.size) sendNow(); }, 1000);   // heartbeat ระหว่างกดค้าง กันกลับ Stand by
+
+  function ensureManual() {
+    if (mode !== 'manual') {
+      pos = ghost ? { l: { ...ghost.l }, r: { ...ghost.r } } : defaultPair(st, aspect);
+      mode = 'manual'; bus.set('mode', 'manual'); modeUI();
+    }
+    if (!pos) pos = defaultPair(st, aspect);
+  }
+
+  /* ---- multi-touch pad ---- */
+  const ptrs = new Map();
+  const fracOf = e => { const r = pad.getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height, w: r.width, h: r.height }; };
+  const heldKeys = () => new Set([...ptrs.values()].map(p => p.type));
+  function markHeld() { const h = heldKeys(); H.l.classList.toggle('held', h.has('l') || h.has('both')); H.r.classList.toggle('held', h.has('r') || h.has('both')); }
+
+  pad.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+    ensureManual();
+    const f = fracOf(e), R = eyeR(st, aspect) * f.h, held = heldKeys();
+    let best = null, bd = Infinity;
+    for (const key of ['l', 'r']) {
+      if (held.has(key)) continue;
+      const d = Math.hypot((pos[key].x - f.x) * f.w, (pos[key].y - f.y) * f.h);
+      if (d < Math.max(R * 1.3, 34) && d < bd) { bd = d; best = key; }
+    }
+    if (best) ptrs.set(e.pointerId, { type: best, ox: pos[best].x - f.x, oy: pos[best].y - f.y });
+    else ptrs.set(e.pointerId, { type: 'both', sx: f.x, sy: f.y, lx: f.x, ly: f.y, sl: { ...pos.l }, sr: { ...pos.r } });
+    vib(10); markHeld(); sendNow();
+  });
+
+  pad.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    e.preventDefault();
+    const f = fracOf(e), b = bounds(st, aspect);
+    if (mode !== 'manual') ensureManual();
+    if (p.type === 'both') {
+      p.lx = f.x; p.ly = f.y;
+      const held = heldKeys(), keys = ['l', 'r'].filter(k => !held.has(k));
+      let dx = f.x - p.sx, dy = f.y - p.sy;
+      for (const k of keys) {   // จำกัดให้ทั้งคู่อยู่ในจอ และรักษาระยะห่างไว้
+        const s = k === 'l' ? p.sl : p.sr;
+        if (b.rx < .5) dx = clamp(dx, b.rx - s.x, 1 - b.rx - s.x);
+        if (b.top + b.bot < 1) dy = clamp(dy, b.top - s.y, 1 - b.bot - s.y);
+      }
+      for (const k of keys) { const s = k === 'l' ? p.sl : p.sr; pos[k] = clampPos({ x: s.x + dx, y: s.y + dy }, b); }
+    } else {
+      pos[p.type] = clampPos({ x: f.x + p.ox, y: f.y + p.oy }, b);
+    }
+    scheduleSend();
+  });
+
+  const release = e => {
+    if (!ptrs.delete(e.pointerId)) return;
+    for (const p of ptrs.values()) if (p.type === 'both') { p.sx = p.lx; p.sy = p.ly; p.sl = { ...pos.l }; p.sr = { ...pos.r }; }
+    markHeld(); sendNow();
+  };
+  pad.addEventListener('pointerup', release);
+  pad.addEventListener('pointercancel', release);
+
+  /* ---- render handles ---- */
+  function tick() {
+    const now = performance.now(), w = pad.clientWidth, h = pad.clientHeight, R = eyeR(st, aspect) * h;
+    const src = mode === 'manual' && pos ? pos : (ghost || defaultPair(st, aspect));
+    for (const k of ['l', 'r']) {
+      const t = src[k];
+      if (!shown[k]) shown[k] = { ...t };
+      const s = mode === 'manual' ? 1 : .2;
+      shown[k].x = lerp(shown[k].x, t.x, s); shown[k].y = lerp(shown[k].y, t.y, s);
+      const el = H[k];
+      el.style.width = el.style.height = (R * 2) + 'px';
+      el.style.transform = `translate(${shown[k].x * w - R}px,${shown[k].y * h - R}px)`;
+    }
+    const online = now - lastSeen < 4000;
+    const c = $('#conn');
+    c.textContent = !connected ? '🔴 ออฟไลน์' : online ? '🟢 จอออนไลน์' : '⚪ ไม่พบจอ';
+    c.classList.toggle('on', connected && online);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  /* ---- buttons ---- */
+  function modeUI() { $$('#modeSeg button').forEach(b => b.classList.toggle('act', b.dataset.mode === mode)); }
+  $$('#modeSeg button').forEach(b => b.onclick = () => {
+    vib(10);
+    if (b.dataset.mode === 'standby') { mode = 'standby'; bus.set('mode', 'standby'); modeUI(); }
+    else { ensureManual(); sendNow(); }
+  });
+  $('#btnCenter').onclick = () => { vib(10); ensureManual(); pos = defaultPair(st, aspect); sendNow(); };
+  $('#btnBlink').onclick = () => { vib(10); bus.set('blink', Date.now()); };
+
+  function exprUI() { $$('#exprRow button').forEach(b => b.classList.toggle('act', b.dataset.expr === expr)); }
+  $$('#exprRow button').forEach(b => b.onclick = () => { vib(10); expr = b.dataset.expr; exprUI(); bus.set('expr', expr); });
+
+  /* ---- sheets ---- */
+  const closeSheets = () => { $$('.sheet').forEach(s => s.hidden = true); $('#sheetBg').hidden = true; };
+  $$('[data-open]').forEach(b => b.onclick = () => { closeSheets(); $('#' + b.dataset.open).hidden = false; $('#sheetBg').hidden = false; });
+  $$('[data-close]').forEach(b => b.onclick = closeSheets);
+  $('#sheetBg').onclick = closeSheets;
+
+  /* ---- background ---- */
+  const swWrap = $('#swatches');
+  BG_SWATCHES.forEach(c => {
+    const b = document.createElement('button'); b.style.background = c; b.dataset.color = c;
+    b.onclick = () => { vib(10); bus.set('bg', { type: 'color', color: c }); };
+    swWrap.appendChild(b);
+  });
+  $('#bgColor').oninput = e => { clearTimeout(bgUI.t); const c = e.target.value; bgUI.t = setTimeout(() => bus.set('bg', { type: 'color', color: c }), 80); };
+  $('#bgFile').onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    $('#bgStatus').textContent = '⏳ กำลังย่อและอัปโหลดรูป…';
+    try {
+      const data = await shrinkImage(file, 1920, .82);
+      await bus.set('bg', { type: 'image', image: data, color: '#000000' });
+      $('#bgStatus').textContent = `✅ เปลี่ยนรูปพื้นหลังแล้ว (${Math.round(data.length / 1024)} KB)`;
+    } catch (err) { $('#bgStatus').textContent = '❌ อัปโหลดไม่สำเร็จ: ' + err.message; }
+    e.target.value = '';
+  };
+  function bgUI() {
+    $$('#swatches button').forEach(b => b.classList.toggle('act', bg.type === 'color' && b.dataset.color.toLowerCase() === (bg.color || '').toLowerCase()));
+    pad.style.backgroundColor = bg.color || '#000';
+    pad.style.backgroundImage = bg.type === 'image' && bg.image ? `url("${bg.image}")` : 'none';
+  }
+
+  /* ---- settings ---- */
+  const sendSettings = () => { clearTimeout(sendSettings.t); sendSettings.t = setTimeout(() => bus.set('settings', st), 80); };
+  function syncSettingsUI() {
+    $('#sSize').value = Math.round(st.size * 100); $('#vSize').textContent = Math.round(st.size * 100);
+    $('#sPupil').value = Math.round(st.pupil * 100); $('#vPupil').textContent = Math.round(st.pupil * 100) + '%';
+    $('#sTrail').checked = !!st.trail; $('#sBrows').checked = !!st.brows;
+    $('#sBrowColor').value = st.browColor; $('#sIdle').value = String(st.idle);
+  }
+  $('#sSize').oninput = e => { st.size = e.target.value / 100; $('#vSize').textContent = e.target.value; sendSettings(); };
+  $('#sPupil').oninput = e => { st.pupil = e.target.value / 100; $('#vPupil').textContent = e.target.value + '%'; sendSettings(); };
+  $('#sTrail').onchange = e => { st.trail = e.target.checked; sendSettings(); };
+  $('#sBrows').onchange = e => { st.brows = e.target.checked; sendSettings(); };
+  $('#sBrowColor').oninput = e => { st.browColor = e.target.value; sendSettings(); };
+  $('#sIdle').onchange = e => { st.idle = +e.target.value; sendSettings(); };
+
+  syncSettingsUI(); modeUI(); exprUI(); bgUI(); layout();
+  keepAwake();
+}
+
+async function shrinkImage(file, max, q) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('อ่านรูปไม่ได้')); i.src = url; });
+    const s = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', q);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/* ======================================================
+   LANDING
+   ====================================================== */
+function initLanding() {
+  $('#roomIn').value = ROOM;
+  const go = v => { const room = ($('#roomIn').value.trim().replace(/[^a-zA-Z0-9_-]/g, '')) || 'main'; location.href = `${location.pathname}?view=${v}&room=${room}`; };
+  $('#goDisplay').onclick = () => go('display');
+  $('#goRemote').onclick = () => go('remote');
+  $('#busNote').innerHTML = FIREBASE_CONFIG
+    ? '🔥 เชื่อม Firebase แล้ว — เปิดจอบนคอม/จอใหญ่ แล้วสแกน QR จากมือถือ'
+    : '🧪 ยังไม่ได้ใส่ Firebase config — ตอนนี้เป็นโหมดทดสอบ: เปิดจอและรีโมทเป็น 2 แท็บในเบราว์เซอร์เดียวกัน<br>ใช้ข้ามเครื่องจริงให้ใส่ <b>FIREBASE_CONFIG</b> ด้านบนของไฟล์';
+}
+
+/* ---------------- boot ---------------- */
+(async () => {
+  if (VIEW === 'display') { $('#display').hidden = false; initDisplay(await createBus()); }
+  else if (VIEW === 'remote') { $('#remote').hidden = false; initRemote(await createBus()); }
+  else { $('#landing').hidden = false; initLanding(); }
+})();
+</script>
+</body>
+</html>
